@@ -3,9 +3,10 @@
 #include "L298N.h"
 
 RF24 radio(9, 10);
-byte recived_data, pipeNo; 
+byte receivedData, pipeNo; 
 byte address[][6] = {"1Node", "2Node", "3Node", "4Node", "5Node", "6Node"};
 
+const unsigned int sensors[8] = {0,1,2,3,4,5,6,7}; //поменять пины
 const unsigned int IN1 = 3;
 const unsigned int IN2 = 4;
 const unsigned int EN1 = 5;
@@ -18,11 +19,11 @@ const unsigned int timeToStop = 100;
 bool autoMode = false;
 byte moveDirection[2];
 
-L298N motorLeft(EN2, IN3, IN4); // переиминовать
+L298N motorLeft(EN2, IN3, IN4);
 L298N motorRight(EN1, IN1, IN2);
 
-unsigned long moveTimer;
-byte moveSpeed = 0;
+unsigned long moveTimer, autoModeTimer;
+int moveSpeed = 0;
 int lastMoveIndex = -1;
 
 void setup() {
@@ -42,15 +43,46 @@ void setup() {
 
   radio.powerUp();          // начать работу
   radio.startListening();
-  motorLeft.setSpeed(255);
-  motorRight.setSpeed(255);
-  motorLeft.forward();
-  motorRight.forward();
 }
 
-unsigned long commandTimer;
-
 void loop() {
+  byte pipeNo;
+  while ( radio.available(&pipeNo)) { // есть входящие данные
+    // чиатем входящий сигнал
+    radio.read(&receivedData, sizeof(receivedData));
+
+    if (receivedData == 0)
+    {
+      autoMode = true;
+      autoModeTimer = millis();
+    }
+    else if (receivedData < 5)
+    {
+      move(receivedData - 1);
+    }
+  }
+  if (autoMode)
+  {
+    if(sensors[1])
+    {
+      if (sensors[0])
+      {
+        move(0);
+      }
+      else if (sensors[2])
+      {
+        move(1);
+      }
+      else if (sensors[3])
+      {
+        move(3);
+      }
+      else
+      {
+        move(0);
+      }
+    }
+  }
 }
 
 void move(int index)
@@ -65,6 +97,10 @@ void move(int index)
     motorLeft.setSpeed(moveSpeed);
     motorRight.setSpeed(moveSpeed);
     moveSpeed += (millis() - moveTimer) / accelerationTime / 255;
+    if (moveSpeed > 255)
+    {
+      moveSpeed = 255;
+    }
   }
   if (index == lastMoveIndex)
   {
