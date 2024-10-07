@@ -6,25 +6,84 @@ RF24 radio(9, 10);
 byte receivedData, pipeNo; 
 byte address[][6] = {"1Node", "2Node", "3Node", "4Node", "5Node", "6Node"};
 
-const unsigned int sensors[8] = {0,1,2,3,4,5,6,7}; //поменять пины
+const uint8_t sensors[8] = {6,19,14,17,4,5,6,7}; //поменять пины
 const unsigned int IN1 = 3;
 const unsigned int IN2 = 4;
 const unsigned int EN1 = 5;
 const unsigned int IN3 = 7;
 const unsigned int IN4 = 8;
 const unsigned int EN2 = 6;
-const unsigned int accelerationTime = 500;
+const unsigned int accelerationTime = 1, continueTime = 2000;
 const unsigned int timeToStop = 100;
 
-bool autoMode = false;
+bool autoMode = true;
 byte moveDirection[2];
 
 L298N motorLeft(EN2, IN3, IN4);
 L298N motorRight(EN1, IN1, IN2);
 
-unsigned long moveTimer, autoModeTimer;
-int moveSpeed = 0;
-int lastMoveIndex = -1;
+unsigned long moveTimer, stopTimer, continueTimer;
+int moveSpeedR = 200, moveSpeedL = 210;
+
+
+void move(int index)
+{
+  if(index == 0)
+  {
+    motorRight.setSpeed(moveSpeedR);
+    motorLeft.setSpeed(moveSpeedL);
+    motorRight.forward();
+    motorLeft.forward();
+  }
+  if(index == 1)
+  {
+    motorRight.setSpeed(moveSpeedR / 3);
+    motorLeft.setSpeed(moveSpeedL);
+    motorRight.forward();
+    motorLeft.forward();
+  }
+  if(index == 2)
+  {
+    motorRight.setSpeed(moveSpeedR / 3);
+    motorLeft.setSpeed(moveSpeedL);
+    motorRight.backward();
+    motorLeft.forward();
+  }
+  if(index == 3)
+  {
+    motorRight.setSpeed(moveSpeedR);
+    motorLeft.setSpeed(moveSpeedL);
+    motorRight.backward();
+    motorLeft.forward();
+  }
+  if(index == -1)
+  {
+    motorRight.setSpeed(moveSpeedR);
+    motorLeft.setSpeed(moveSpeedL / 3);
+    motorRight.forward();
+    motorLeft.forward();
+  }
+  if(index == -2)
+  {
+    motorRight.setSpeed(moveSpeedR);
+    motorLeft.setSpeed(moveSpeedL / 3);
+    motorRight.forward();
+    motorLeft.backward();
+  }
+  if(index == -3)
+  {
+    motorRight.setSpeed(moveSpeedR);
+    motorLeft.setSpeed(moveSpeedL);
+    motorRight.forward();
+    motorLeft.backward();
+  }
+}
+
+void stopMove()
+{
+  motorLeft.stop();
+  motorRight.stop();
+}
 
 void setup() {
   radio.begin(); //активировать модуль
@@ -43,6 +102,15 @@ void setup() {
 
   radio.powerUp();          // начать работу
   radio.startListening();
+
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+  pinMode(A4, INPUT);
+  pinMode(A5, INPUT);
+  pinMode(A6, INPUT);
+  pinMode(2, INPUT);
 }
 
 void loop() {
@@ -54,84 +122,62 @@ void loop() {
     if (receivedData == 0)
     {
       autoMode = true;
-      autoModeTimer = millis();
+      stopTimer = millis();
     }
     else if (receivedData < 5)
     {
       move(receivedData - 1);
+      stopTimer - millis();
     }
+  }
+  if (moveSpeedR != 0 && millis() - stopTimer > 150)
+  {
+    //stopMove();
+    //autoMode = false;
   }
   if (autoMode)
   {
-    if(sensors[1])
+    if(analogRead(A6) < 100 || analogRead(A5) < 100)
     {
-      if (sensors[0])
+      move(0);
+      continueTimer = millis();
+    }
+    else if(!digitalRead(2))
+    {
+      move(-3);
+      continueTimer = millis();
+    }
+    else if(analogRead(A0) < 100)
+    {
+      move(-2);
+      continueTimer = millis();
+    }
+    else if(analogRead(A1) < 100)
+    {
+      move(-1);
+      continueTimer = millis();
+    }
+    else if(analogRead(A2) < 100)
+    {
+      move(3);
+      continueTimer = millis();
+    }
+    else if(analogRead(A3) < 100)
+    {
+      move(2);
+      continueTimer = millis();
+    }
+    else if(analogRead(A4) < 100)
+    {
+      move(1);
+      continueTimer = millis();
+    }
+    else
+    {
+      if (millis() - continueTimer > continueTime)
       {
-        move(0);
-      }
-      else if (sensors[2])
-      {
-        move(1);
-      }
-      else if (sensors[3])
-      {
-        move(3);
-      }
-      else
-      {
-        move(0);
+        stopMove();
       }
     }
   }
-}
-
-void move(int index)
-{
-  if (moveSpeed == 0)
-  {
-    moveTimer == millis();
-    moveSpeed++;
-  }
-  if (moveSpeed != 255 && millis() - moveTimer >= accelerationTime / 255)
-  {
-    motorLeft.setSpeed(moveSpeed);
-    motorRight.setSpeed(moveSpeed);
-    moveSpeed += (millis() - moveTimer) / accelerationTime / 255;
-    if (moveSpeed > 255)
-    {
-      moveSpeed = 255;
-    }
-  }
-  if (index == lastMoveIndex)
-  {
-    return;
-  }
-  switch(index)
-  {
-    case 0:
-      motorLeft.forward();
-      motorRight.forward();
-      break;
-    case 1:
-      motorLeft.forward();
-      motorRight.backward();
-      break;
-    case 2:
-      motorLeft.backward();
-      motorRight.backward();
-      break;
-    case 3:
-      motorLeft.backward();
-      motorRight.forward();
-      break;
-  }
-  lastMoveIndex = index;
-}
-
-void stopMove()
-{
-  moveSpeed = 0;
-  lastMoveIndex = -1;
-  motorLeft.stop();
-  motorRight.stop();
 }
