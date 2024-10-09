@@ -8,7 +8,7 @@ byte receivedData, pipeNo;
 byte address[][6] = {"1Node", "2Node", "3Node", "4Node", "5Node", "6Node"};
 //endregion
 //region Motor Settings and Variables
-const unsigned int minPWM = 150, maxPWM = 255, MDC = -10; // MDC - motorDifferneceCorrection. Negative - left motor correction, positive - right motor correction
+const unsigned int minPWM = 100, maxPWM = 200, MDC = 0; // MDC - motorDifferneceCorrection at full power. Negative - left motor correction, positive - right motor correction
 const unsigned int IN1 = 3;
 const unsigned int IN2 = 4;
 const unsigned int EN1 = 5;
@@ -21,7 +21,7 @@ L298N motorLeft(EN2, IN3, IN4);
 L298N motorRight(EN1, IN1, IN2);
 //endregion
 //region sensors functions
-const float sensorsWeights[8] = {-0.436,-0.313,-0.188,-0.063,0.063,0.188,0.313,0.436};
+const float sensorsWeights[8] = {-1,-0.718,-0.431,-0.144,0.144,0.431,0.718,1}; // {-0.436,-0.313,-0.188,-0.063,0.063,0.188,0.313,0.436}; {-1,-0.718,-0.431,-0.144,0.144,0.431,0.718,1};
 void initSensors()
 {
   pinMode(A0, INPUT);
@@ -45,25 +45,25 @@ bool getSensor(int index) // from 0 to 7, from left to right
       return !digitalRead(2);
     break;
     case 1:
-      return analogRead(A0) < 100;
-    break;
-    case 2:
       return analogRead(A1) < 100;
     break;
+    case 2:
+      return analogRead(A6) < 100;
+    break;
     case 3:
-      return analogRead(A2) < 100;
+      return analogRead(A4) < 100;
     break;
     case 4:
-      return analogRead(A3) < 100;
+      return analogRead(A2) < 100;
     break;
     case 5:
-      return analogRead(A4) < 100;
+      return analogRead(A3) < 100;
     break;
     case 6:
       return analogRead(A5) < 100;
     break;
     case 7:
-      return analogRead(A6) < 100;
+      return analogRead(A0) < 100;
     break;
   }
 }
@@ -118,7 +118,7 @@ void loop() {
     //autoMode = false;
   }
   if (autoMode)
-  {
+  { 
     autoMove();
   }
 }
@@ -126,18 +126,30 @@ void loop() {
 void autoMove()
 {
   float vector = 0;
+  bool skip = true;
   for (int i = 0; i < 8; i++)
   {
     if (getSensor(i))
     {
       vector += sensorsWeights[i];
+      skip = false;
+      continueTimer = millis();
     }
   }
-  move(vector);
+  if (!skip)
+  {
+    move(vector);
+  }
+  else if (millis() - continueTimer > continueTime)
+  {
+    stopMove();
+  }
 }
 
 void move(float vector) // -1 - move on the left, 0 - forward move, 1 - move on the right
 {
+  if (vector > 1) vector = 1;
+  if (vector < -1) vector = -1;
   //calculating speed and motors direction
   int leftMotorSpeed, rightMotorSpeed;
   bool leftMotorReverse = false, rightMotorReverse = false;
@@ -156,7 +168,7 @@ void move(float vector) // -1 - move on the left, 0 - forward move, 1 - move on 
   {
     rightMotorSpeed = map(maxMoveSpeed,0,100,minPWM,maxPWM);
     float leftMotorPower = (0.5 + vector) * 2;
-    if (vector > 0.5)
+    if (vector < -0.5)
     {
       leftMotorReverse = true;
       leftMotorPower *= -1;
@@ -164,25 +176,28 @@ void move(float vector) // -1 - move on the left, 0 - forward move, 1 - move on 
     leftMotorSpeed = map((int)(maxMoveSpeed * leftMotorPower),0,100,minPWM,maxPWM);
   }
   // correction motor speed
-  int correctionOverload = 0;
   if (MDC > 0)
   {
-    rightMotorSpeed += MDC;
-    if (rightMotorSpeed > maxPWM)
+    if (rightMotorSpeed + MDC / maxPWM > maxPWM)
     {
-      correctionOverload = rightMotorSpeed - maxPWM;
+      leftMotorSpeed -= MDC / maxPWM;
+    }
+    else
+    {
+      rightMotorSpeed += MDC / maxPWM;
     }
   }
   else 
   {
-    leftMotorSpeed -= MDC;
-    if (leftMotorSpeed > maxPWM)
+    if (leftMotorSpeed - MDC / maxPWM > maxPWM)
     {
-      leftMotorSpeed = leftMotorSpeed - maxPWM;
+      rightMotorSpeed += MDC / maxPWM;
+    }
+    else
+    {
+      leftMotorSpeed -= MDC / maxPWM;
     }
   }
-  rightMotorSpeed -= correctionOverload;
-  leftMotorSpeed -= correctionOverload;
   // set motors
   motorRight.setSpeed(rightMotorSpeed);
   motorLeft.setSpeed(leftMotorSpeed);
@@ -208,4 +223,12 @@ void stopMove()
 {
   motorLeft.stop();
   motorRight.stop();
+}
+
+void extraStop()
+{
+  motorLeft.setSpeed(maxPWM);
+  motorRight.setSpeed(maxPWM);
+  motorLeft.backward();
+  motorRight.backward();
 }
