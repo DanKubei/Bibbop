@@ -69,7 +69,7 @@ bool getSensor(int index) // from 0 to 7, from left to right
 }
 //endregion
 //region Local Variables and Settings
-bool autoMode = true;
+bool autoMode = false;
 unsigned long stopTimer, continueTimer;
 int maxMoveSpeed = 100;
 //endregion
@@ -108,14 +108,34 @@ void loop() {
     }
     else if (receivedData < 5)
     {
-      move(receivedData - 1);
-      stopTimer - millis();
+      motorLeft.setSpeed(maxPWM);
+      motorRight.setSpeed(maxPWM);
+      switch(receivedData - 1)
+      {
+        case 0:
+          motorLeft.forward();
+          motorRight.forward();
+        break;
+        case 1:
+          motorLeft.forward();
+          motorRight.backward();
+        break;
+        case 2:
+          motorLeft.backward();
+          motorRight.forward();
+        break;
+        case 3:
+          motorLeft.backward();
+          motorRight.backward();
+        break;
+      }
+      stopTimer = millis();
     }
   }
   if (millis() - stopTimer > 150)
   {
-    //stopMove();
-    //autoMode = false;
+    stopMove();
+    autoMode = false;
   }
   if (autoMode)
   { 
