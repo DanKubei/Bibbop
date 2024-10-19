@@ -19,12 +19,12 @@
 #define sensor_6 35
 #define sensor_7 34
 
-#define min_pwm 30000
-#define max_pwm 40000
+#define min_pwm 35000
+#define max_pwm 65535
 
 #define commandTimeout 10
 
-float sensorsPos[8] = {7,5,3,1,-1,-3,-5,-7};
+float sensorsPos[8] = {4,3,2,1,-1,-2,-3,-4};
 
 typedef struct struct_message {
     int code;
@@ -37,13 +37,14 @@ const int frequency = 30;
 const int resolution = 16;
 
 long lastCommandTimer;
+bool autoMode = false;
 
 void OnDataRecv(const esp_now_recv_info_t * esp_now_info, const uint8_t *data, int data_len) {
   memcpy(&myData, data, sizeof(myData));
   switch(myData.code)
   {
     case 0:
-      autoMove();
+      autoMode = true;
     break;
     case 1:
       set_motors_speed(max_pwm, max_pwm, false, false);
@@ -137,7 +138,7 @@ void autoMove()
       input += sensorsPos[i];
     }
   }
-  move(PID(setPoint, input, 5000, 0, 0));
+  move(PID(setPoint, input, 10178, 0, 5089));
 }
 
 void move(float pid)
@@ -255,5 +256,10 @@ void loop()
   if (millis() - lastCommandTimer > commandTimeout)
   {
     stopMotors();
+    autoMode = false;
+  }
+  if (autoMode)
+  {
+    autoMove();
   }
 }
