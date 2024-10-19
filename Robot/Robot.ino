@@ -20,7 +20,7 @@
 #define sensor_7 34
 
 #define min_pwm 35000
-#define max_pwm 65535
+#define max_pwm 38000
 
 #define commandTimeout 10
 
@@ -138,7 +138,7 @@ void autoMove()
       input += sensorsPos[i];
     }
   }
-  move(PID(setPoint, input, 10178, 0, 5089));
+  move(PID(setPoint, input, 325, 0, 50));
 }
 
 void move(float pid)
@@ -147,23 +147,37 @@ void move(float pid)
   float right_motor_speed = 0, left_motor_speed = 0;
   bool right_motor_reverse = false;
   bool left_motor_reverse = false;
-  if (medianSpeed - pid < min_pwm)
+  if (medianSpeed - pid * 3 < min_pwm)
   {
-    right_motor_speed = 2 * min_pwm - medianSpeed + pid;
+    right_motor_speed = 2 * min_pwm - medianSpeed + pid * 3;
     right_motor_reverse = true;
   }
   else
   {
-    right_motor_speed = medianSpeed - pid;
+    if(pid < 0)
+    {
+      right_motor_speed = medianSpeed - pid * 3;
+    }
+    else
+    {
+      right_motor_speed = medianSpeed - pid;
+    }
   }
-  if (medianSpeed + pid < min_pwm)
+  if (medianSpeed + pid * 3 < min_pwm)
   {
-    left_motor_speed = 2 * min_pwm - medianSpeed - pid;
+    left_motor_speed = 2 * min_pwm - medianSpeed - pid * 3;
     left_motor_reverse = true;
   }
   else
   {
-    left_motor_speed = medianSpeed + pid;
+    if(pid > 0)
+    {
+      left_motor_speed = medianSpeed + pid * 3;
+    }
+    else
+    {
+      left_motor_speed = medianSpeed + pid;
+    }
   }
   left_motor_speed = clamp(left_motor_speed, -max_pwm, max_pwm);
   right_motor_speed = clamp(right_motor_speed, -max_pwm, max_pwm);
