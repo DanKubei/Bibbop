@@ -19,15 +19,15 @@
 #define sensor_6 35
 #define sensor_7 34
 
-#define min_pwm 35000
+#define min_pwm 30000
 #define max_pwm 40000
 
 #define commandTimeout 10
 
-float sensorsPos[8] = {3.5,2.5,1.5,0.5,-0.5,-1.5,-2.5,-3.5};
+float sensorsPos[8] = {7,5,3,1,-1,-3,-5,-7};
 
 typedef struct struct_message {
-    int a;
+    int code;
 } struct_message;
 
 struct_message myData;
@@ -40,22 +40,22 @@ long lastCommandTimer;
 
 void OnDataRecv(const esp_now_recv_info_t * esp_now_info, const uint8_t *data, int data_len) {
   memcpy(&myData, data, sizeof(myData));
-  switch(myData.a)
+  switch(myData.code)
   {
     case 0:
       autoMove();
     break;
     case 1:
-      set_motors_speed(100, 100, false, false);
+      set_motors_speed(max_pwm, max_pwm, false, false);
     break;
     case 2:
-      set_motors_speed(100, 100, true, true);
+      set_motors_speed(max_pwm, max_pwm, true, true);
     break;
     case 3:
-      set_motors_speed(100, 100, false, true);
+      set_motors_speed(max_pwm, max_pwm, false, true);
     break;
     case 4:
-      set_motors_speed(100, 100, true, false);
+      set_motors_speed(max_pwm, max_pwm, true, false);
     break;
   }
   lastCommandTimer = millis();
@@ -81,8 +81,8 @@ float clamp(float value, float min, float max)
 
 void set_motors_speed(int right_motor_speed, int left_motor_speed, bool right_motor_reverse, bool left_motor_reverse)
 {
-  ledcWrite(motor_right_pwm, get_speed(right_motor_speed));
-  ledcWrite(motor_left_pwm, get_speed(left_motor_speed));
+  ledcWrite(motor_right_pwm, right_motor_speed);
+  ledcWrite(motor_left_pwm, left_motor_speed);
   digitalWrite(motor_right_forward, right_motor_reverse ? 0 : 1);
   digitalWrite(motor_right_backward, right_motor_reverse ? 1 : 0);
   digitalWrite(motor_left_forward, left_motor_reverse ? 0 : 1);
@@ -100,66 +100,73 @@ float P(float setPoint, float input)
   return setPoint - input;
 }
 
-long ITimer;
-float lastI;
+int err_arr[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int err_p = -1;
 
-float I(float setPoint, float input)
+float I()
 {
-  float output = lastI + (setPoint - input) * (millis() - ITimer) / 1000;
-  ITimer = millis();
-  lastI = output;
-  return output;
+  int error_sum = 0;
+  for (int i = 0; i < 10; i++) 
+  {
+    error_sum += err_arr[i];
+  }
+  return error_sum / 10;
 }
 
-long DTimer;
-float lastError;
-
-float D(float setPoint, float input)
+float D(float error)
 {
-  float error = setPoint - input;
-  float output = (error - lastError) / (millis() - DTimer) / 1000;
-  DTimer = millis();
-  lastError = error;
-  return output;
+  err_p = (err_p + 1) % 10;
+  err_arr[err_p] = error;
+  return err_arr[err_p] - err_arr[(err_p+11) % 10];
 }
 
 float PID(float setPoint, float input, float Pk, float Ik, float Dk)
 {
-  return P(setPoint, input) * Pk + I(setPoint, input) * Ik + D(setPoint, input) * Dk;
+  float error = P(setPoint, input);
+  return error * Pk + D(error) * Dk + I() * Ik;
 }
 
 void autoMove()
 {
-  float target = 0;
-  float position = 0;
+  float setPoint = 0;
+  float input = 0;
   for (int i = 0; i < 8; i++)
   {
     if (!get_sensor(i))
     {
-      position += sensorsPos[i];
+      input += sensorsPos[i];
     }
   }
-  move(PID(target, position, 0.2, 0.07, 0));
+  move(PID(setPoint, input, 5000, 0, 0));
 }
 
-void move(float vector)
+void move(float pid)
 {
-    vector = clamp(vector,-1,1);
-    int right_motor_speed = (int)(100.0 * clamp(0.5 - vector, -0.5, 0.5) * 2.0);
-    int left_motor_speed = (int)(100.0 * clamp(0.5 + vector, -0.5, 0.5) * 2.0);
-    bool right_motor_reverse = false;
-    bool left_motor_reverse = false;
-    if (right_motor_speed < 0)
-    {
-        right_motor_reverse = true;
-        right_motor_speed *= -1;
-    }
-    if (left_motor_speed < 0)
-    {
-        left_motor_reverse = true;
-        left_motor_speed *= -1;
-    }
-    set_motors_speed(right_motor_speed, left_motor_speed, right_motor_reverse, left_motor_reverse);
+  int medianSpeed = (min_pwm + max_pwm) / 2;
+  float right_motor_speed = 0, left_motor_speed = 0;
+  bool right_motor_reverse = false;
+  bool left_motor_reverse = false;
+  if (medianSpeed - pid < min_pwm)
+  {
+    right_motor_speed = 2 * min_pwm - medianSpeed + pid;
+    right_motor_reverse = true;
+  }
+  else
+  {
+    right_motor_speed = medianSpeed - pid;
+  }
+  if (medianSpeed + pid < min_pwm)
+  {
+    left_motor_speed = 2 * min_pwm - medianSpeed - pid;
+    left_motor_reverse = true;
+  }
+  else
+  {
+    left_motor_speed = medianSpeed + pid;
+  }
+  left_motor_speed = clamp(left_motor_speed, -max_pwm, max_pwm);
+  right_motor_speed = clamp(right_motor_speed, -max_pwm, max_pwm);
+  set_motors_speed(right_motor_speed, left_motor_speed, right_motor_reverse, left_motor_reverse);
 }
 
 bool get_sensor(int index)
