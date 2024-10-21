@@ -37,11 +37,11 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
  
 void setup() {
-  pinMode(forwardButton, INPUT);
-  pinMode(backwardButton, INPUT);
-  pinMode(rightButton, INPUT);
-  pinMode(leftButton, INPUT);
-  pinMode(autoButton, INPUT);
+  pinMode(forwardButton, INPUT_PULLDOWN);
+  pinMode(backwardButton, INPUT_PULLDOWN);
+  pinMode(rightButton, INPUT_PULLDOWN);
+  pinMode(leftButton, INPUT_PULLDOWN);
+  pinMode(autoButton, INPUT_PULLDOWN);
   // Запускаем монитор порта
   Serial.begin(115200);
  
