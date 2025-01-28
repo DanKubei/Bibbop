@@ -19,8 +19,8 @@
 #define sensor_6 35
 #define sensor_7 34
 
-#define min_pwm 35000
-#define max_pwm 38000
+#define min_pwm 40000
+#define max_pwm 43000
 
 #define commandTimeout 10
 
@@ -138,7 +138,7 @@ void autoMove()
       input += sensorsPos[i];
     }
   }
-  move(PID(setPoint, input, 325, 0, 50));
+  move(PID(setPoint, input, 300, 15, 60));
 }
 
 void move(float pid)
